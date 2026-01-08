@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICM CHURCH - Debug Mode</title>
+    <title>ICM CHURCH - Web Ledger</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -36,27 +36,20 @@
         // --- ADMIN PASSWORD ---
         const ADMIN_PASSWORD = "admin5566"; 
 
-        // --- FIREBASE CONFIGURATION ---
+        // --- FIREBASE CONFIGURATION (icm-church-web) ---
         const firebaseConfig = {
-            apiKey: "AIzaSyACJG6vDBi3Xf1Ct-1HeQnPaArY0H835hU",
-            authDomain: "icm-church-67de6.firebaseapp.com",
-            projectId: "icm-church-67de6",
-            storageBucket: "icm-church-67de6.firebasestorage.app",
-            messagingSenderId: "786976624992",
-            appId: "1:786976624992:web:c82b0ca0d08d317bb38e05"
+          apiKey: "AIzaSyBp_NMUYpgEmjQ2mMGMqa0tZBlLQ8401wI",
+          authDomain: "icm-church-web.firebaseapp.com",
+          projectId: "icm-church-web",
+          storageBucket: "icm-church-web.firebasestorage.app",
+          messagingSenderId: "577289712683",
+          appId: "1:577289712683:web:97a7e923656127dc60266e"
         };
 
         // Initialize Firebase
-        try {
-            if (!firebase.apps.length) {
-                firebase.initializeApp(firebaseConfig);
-                console.log("🔥 Firebase Initialized Successfully!");
-            }
-        } catch (e) {
-            console.error("🔥 Firebase Init Error:", e);
-            alert("Critical Error: Could not start Firebase. Check Console.");
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
         }
-        
         const db = firebase.firestore();
 
         // --- ICONS COMPONENT ---
@@ -83,7 +76,6 @@
             const [loading, setLoading] = React.useState(true);
             const [isSubmitting, setIsSubmitting] = React.useState(false);
             const [showInputForm, setShowInputForm] = React.useState(false);
-            const [errorMsg, setErrorMsg] = React.useState(null); // To show on UI
 
             // Fetch Data
             React.useEffect(() => {
@@ -96,18 +88,15 @@
                         }));
                         setTransactions(data);
                         setLoading(false);
-                        setErrorMsg(null); // Clear errors if successful
                     }, (error) => {
-                        console.error("❌ READ ERROR:", error);
+                        console.error("Error fetching data: ", error);
                         setLoading(false);
                         
-                        // Detailed Error Handling for Read
-                        if (error.code === 'permission-denied') {
-                            setErrorMsg("⚠️ Permission Denied: Rules మార్చలేదు! (Console -> Rules -> 'allow read, write: if true;')");
-                        } else if (error.code === 'unavailable') {
-                            setErrorMsg("⚠️ Network Error: ఇంటర్నెట్ చెక్ చేసుకో మామా.");
-                        } else {
-                            setErrorMsg(`⚠️ Read Error: ${error.message} (${error.code})`);
+                        // Error Handling Messages
+                        if(error.code === 'permission-denied') {
+                            alert("🚨 ERROR: Database Permissions!\n\nమామా, నువ్వు 'Create Database' చేసినప్పుడు 'Start in Test Mode' సెలెక్ట్ చేసావా?");
+                        } else if (error.code === 'unimplemented' || error.message.includes("project")) {
+                             alert("🚨 ERROR: Database Not Found!\n\nమామా, Console లో ఇంకా 'Create Database' బటన్ నొక్కలేదు. అది నొక్కితేనే Rules ట్యాబ్ వస్తుంది, కోడ్ పనిచేస్తుంది.");
                         }
                     });
 
@@ -130,16 +119,16 @@
                 e.preventDefault();
                 if (!amount || !desc || !password) return;
                 
+                // --- PASSWORD CHECK ---
                 if (password !== ADMIN_PASSWORD) {
-                    alert("🛑 Wrong Password!");
+                    alert("🛑 Wrong Password! (పాస్‌వర్డ్ తప్పు)");
                     return;
                 }
 
                 setIsSubmitting(true);
-                setErrorMsg(null);
 
                 try {
-                    console.log("Attempting to write to DB...");
+                    // Add Data
                     await db.collection('transactions').add({
                         amount: Number(amount),
                         description: desc,
@@ -148,28 +137,15 @@
                         displayDate: new Date().toLocaleDateString('en-GB'),
                         addedBy: 'Admin'
                     });
-                    console.log("✅ Write Successful!");
 
                     setAmount('');
                     setDesc('');
                     setPassword('');
-                    alert("✅ Success! Data Saved.");
+                    alert("✅ సూపర్! డేటా సేవ్ అయ్యింది.");
                     setShowInputForm(false);
                 } catch (error) {
-                    console.error("❌ WRITE ERROR:", error);
-                    
-                    // Detailed Error Handling for Write
-                    let userFriendlyError = "";
-                    if (error.code === 'permission-denied') {
-                        userFriendlyError = "🚨 PERMISSION DENIED!\n\nకారణం: Firebase Rules ఇంకా లాక్ లో ఉన్నాయి.\nసొల్యూషన్: Firebase Console కి వెళ్ళి -> Firestore Database -> Rules ట్యాబ్ లో కోడ్ మార్చు.";
-                    } else if (error.code === 'unavailable') {
-                        userFriendlyError = "📡 Network Error: సర్వర్ కనెక్ట్ అవ్వట్లేదు. ఇంటర్నెట్ ఉందా?";
-                    } else {
-                        userFriendlyError = `❌ Error: ${error.message}\nCode: ${error.code}`;
-                    }
-                    
-                    alert(userFriendlyError);
-                    setErrorMsg(userFriendlyError); // Show on UI too
+                    console.error("Error adding document: ", error);
+                    alert("Error: " + error.message);
                 }
                 setIsSubmitting(false);
             };
@@ -186,8 +162,7 @@
                 try {
                     await db.collection('transactions').doc(id).delete();
                 } catch (error) {
-                    console.error("❌ DELETE ERROR:", error);
-                    alert(`Failed to delete: ${error.message}`);
+                    alert("Delete Failed!");
                 }
             };
 
@@ -203,21 +178,13 @@
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-slate-50 flex-col gap-4">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                        <p className="text-slate-400 text-sm">Connecting...</p>
+                        <p className="text-slate-400 text-sm">Loading Church Data...</p>
                     </div>
                 );
             }
 
             return (
                 <div className="max-w-md mx-auto bg-slate-50 min-h-screen shadow-xl relative pb-24">
-                    
-                    {/* ERROR BANNER */}
-                    {errorMsg && (
-                        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 sticky top-0 z-50 shadow-md">
-                            <p className="font-bold">Error Detected:</p>
-                            <p className="text-sm whitespace-pre-line">{errorMsg}</p>
-                        </div>
-                    )}
                     
                     {/* HERO SECTION */}
                     <div className="bg-indigo-700 text-white pt-8 pb-10 px-6 rounded-b-[2.5rem] shadow-xl relative z-0">
@@ -386,7 +353,7 @@
                     </div>
                     
                     <div className="text-center text-slate-300 text-[10px] pb-4">
-                        ICM Church • Debug Mode Active
+                        ICM Church • Simple Ledger (Web)
                     </div>
                 </div>
             );
