@@ -18,9 +18,10 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- FIREBASE COMPAT SCRIPTS (No login required logic) -->
+    <!-- FIREBASE COMPAT SCRIPTS -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics-compat.js"></script>
 
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
@@ -34,17 +35,17 @@
 
     <script type="text/babel">
         // --- CONFIGURATION ---
-        const ADMIN_PASSWORD = "admin5566"; // <--- PASSWORD IKADA SET CHESAM
+        const ADMIN_PASSWORD = "admin5566"; 
 
-        // --- YOUR FIREBASE CONFIGURATION ---
+        // --- YOUR EXACT FIREBASE CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyDG3Ngmf1XbipPM6OIPjiaCmd8V8Ucmw4c",
             authDomain: "icm-church.firebaseapp.com",
             projectId: "icm-church",
             storageBucket: "icm-church.firebasestorage.app",
             messagingSenderId: "542927043546",
-            appId: "1:542927043546:web:dcdc7e5190aee962cfdee3",
-            measurementId: "G-9KYQ4F749P"
+            appId: "1:542927043546:web:36cfdc541a9e86c5cfdee3",
+            measurementId: "G-KZTJNK1K35"
         };
 
         // Initialize Firebase
@@ -52,6 +53,8 @@
             firebase.initializeApp(firebaseConfig);
         }
         const db = firebase.firestore();
+        // Analytics is initialized but strictly not needed for the logic, keeping it as requested
+        const analytics = firebase.analytics();
 
         // --- ICONS COMPONENT ---
         const Icon = ({ name, size = 24, className = "" }) => {
@@ -93,7 +96,7 @@
                         console.error("Error fetching data: ", error);
                         setLoading(false);
                         if(error.code === 'permission-denied') {
-                            alert("Please enable Firestore Rules to 'allow read, write: if true;' since we removed Auth.");
+                            alert("🚨 ERROR: Permission Denied! \n\nమామా, నువ్వు Firebase Rules మార్చలేదు! \nవెంటనే Console కి వెళ్లి Rules లో 'allow read, write: if true;' అని పెట్టు.");
                         }
                     });
 
@@ -116,51 +119,54 @@
                 e.preventDefault();
                 if (!amount || !desc || !password) return;
                 
-                // --- SIMPLE PASSWORD CHECK ---
+                // --- PASSWORD CHECK ---
                 if (password !== ADMIN_PASSWORD) {
-                    alert("🛑 తప్పు పాస్‌వర్డ్! (Wrong Password)");
+                    alert("🛑 Wrong Password! (తప్పు పాస్‌వర్డ్)");
                     return;
                 }
 
                 setIsSubmitting(true);
 
                 try {
-                    // Add Data directly without auth
+                    // Add Data
                     await db.collection('transactions').add({
                         amount: Number(amount),
                         description: desc,
                         type: type,
                         date: firebase.firestore.FieldValue.serverTimestamp(),
                         displayDate: new Date().toLocaleDateString('en-GB'),
-                        addedBy: 'Admin (Web)'
+                        addedBy: 'Admin'
                     });
 
                     setAmount('');
                     setDesc('');
                     setPassword('');
-                    alert("✅ సక్సెస్! లిస్ట్ లో యాడ్ అయ్యింది.");
+                    alert("✅ Success! Entry Added.");
                     setShowInputForm(false);
                 } catch (error) {
-                    console.error("Error:", error);
-                    alert("Error adding data. Check console.");
+                    console.error("Error adding document: ", error);
+                    if(error.code === 'permission-denied') {
+                         alert("🚨 ERROR: Permission Denied! \n\nమామా! Rules మార్చకపోతే డేటా సేవ్ అవ్వదు. \nConsole -> Firestore -> Rules కి వెళ్లి 'allow read, write: if true;' పెట్టు.");
+                    } else {
+                        alert("Error adding data: " + error.message);
+                    }
                 }
                 setIsSubmitting(false);
             };
 
             const handleDelete = async (id) => {
-                const pwd = prompt("🔐 పాస్‌వర్డ్ చెప్పండి (Enter Admin Password):");
+                const pwd = prompt("🔐 Enter Admin Password to DELETE:");
                 if (!pwd) return;
 
                 if (pwd !== ADMIN_PASSWORD) {
-                    alert("🛑 తప్పు పాస్‌వర్డ్! డిలీట్ చేయలేరు.");
+                    alert("🛑 Wrong Password!");
                     return;
                 }
 
                 try {
                     await db.collection('transactions').doc(id).delete();
-                    // Auto update UI, no alert needed
                 } catch (error) {
-                    alert("Delete Failed!");
+                    alert("Delete Failed! Check Rules.");
                 }
             };
 
@@ -176,7 +182,7 @@
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-slate-50 flex-col gap-4">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                        <p className="text-slate-400 text-sm">Loading Accounts...</p>
+                        <p className="text-slate-400 text-sm">Connecting to ICM Church...</p>
                     </div>
                 );
             }
