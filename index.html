@@ -28,6 +28,17 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
         .select-none { user-select: none; -webkit-user-select: none; }
+        
+        /* Progress Bar Animation for Long Press */
+        @keyframes loadWidth { from { width: 0; } to { width: 100%; } }
+        .holding-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 4px;
+            background-color: #6366f1; /* Indigo */
+            z-index: 50;
+        }
     </style>
 </head>
 <body>
@@ -85,6 +96,7 @@
             // Edit/Action Mode State
             const [editId, setEditId] = React.useState(null);
             const [actionItem, setActionItem] = React.useState(null); // Item selected after 10s hold
+            const [holdingId, setHoldingId] = React.useState(null); // Which item is being held
             const pressTimer = React.useRef(null); // Timer for long press
 
             // Fetch Data
@@ -130,11 +142,13 @@
 
             // --- LONG PRESS LOGIC (10 Seconds) ---
             const handlePressStart = (t) => {
-                // Clear any existing timer just in case
+                // Clear any existing timer
                 if (pressTimer.current) clearTimeout(pressTimer.current);
+                setHoldingId(t.id); // Start visual feedback
 
                 pressTimer.current = setTimeout(() => {
                     // This runs only if held for 10 seconds
+                    setHoldingId(null);
                     if(window.navigator.vibrate) window.navigator.vibrate(200);
                     
                     const pwd = prompt("🔐 అడ్మిన్ యాక్సెస్: పాస్‌వర్డ్ ఎంటర్ చేయండి (Admin Password):");
@@ -152,6 +166,7 @@
                     clearTimeout(pressTimer.current);
                     pressTimer.current = null;
                 }
+                setHoldingId(null); // Stop visual feedback
             };
 
             // --- ACTION MENU HANDLERS ---
@@ -167,19 +182,23 @@
                 setShowInputForm(true);
                 setActionItem(null); // Close modal
                 window.scrollTo({ top: 0, behavior: 'smooth' });
+                alert("✏️ ఎడిట్ మోడ్ ఆన్ అయ్యింది. ఫామ్ లో వివరాలు మార్చి అప్‌డేట్ చేయండి.");
             };
 
             // 2. Trigger Delete
             const performDelete = async () => {
                 const t = actionItem;
-                const msg = `⚠️ హెచ్చరిక!\n\n"${t.description}" - ${formatCurrency(t.amount)}\n\nఈ ఎంట్రీని శాశ్వతంగా డిలీట్ చేస్తున్నారు. ఇది వెనక్కి తీసుకోలేము.`;
+                const msg = `⚠️ హెచ్చరిక!\n\n"${t.description}" - ${formatCurrency(t.amount)}\n\nఈ ఎంట్రీని శాశ్వతంగా డిలీట్ చేస్తున్నారు.\nఇది వెనక్కి తీసుకోలేము.\n\nడిలీట్ చేయమంటారా?`;
                 
                 if(!window.confirm(msg)) return;
+
+                // Double check password logic embedded in action menu access, 
+                // but confirming action is good.
 
                 try {
                     await db.collection('transactions').doc(t.id).delete();
                     setActionItem(null); // Close modal
-                    // alert("Deleted Successfully"); // Optional
+                    alert("🗑️ డిలీట్ చేశారు!");
                 } catch (error) {
                     alert("Delete Failed!");
                 }
@@ -207,7 +226,7 @@
 
                 try {
                     if (editId) {
-                        // UPDATE
+                        // UPDATE LOGIC
                         const confirmMsg = `⚠️ అప్‌డేట్ కన్ఫర్మేషన్:\n\nపాత రికార్డు మారుస్తున్నారు.\nకొత్త అమౌంట్: ${formatCurrency(amount)}\nకొత్త వివరం: ${desc}\n\nసేవ్ చేయమంటారా?`;
                         if (!window.confirm(confirmMsg)) {
                             setIsSubmitting(false);
@@ -225,7 +244,7 @@
                         cancelEdit();
 
                     } else {
-                        // ADD
+                        // ADD LOGIC
                         const confirmMsg = `కొత్త ఎంట్రీ:\n\nఅమౌంట్: ${formatCurrency(amount)}\nవివరం: ${desc}\nరకం: ${type === 'income' ? 'ఆదాయం' : 'ఖర్చు'}\n\nసేవ్ చేయమంటారా?`;
                         if (!window.confirm(confirmMsg)) {
                             setIsSubmitting(false);
@@ -274,7 +293,7 @@
                                         <Icon name="settings-2" size={24} />
                                     </div>
                                     <h3 className="text-xl font-bold text-gray-800">Manage Entry</h3>
-                                    <p className="text-sm text-slate-400">Select an action for this record</p>
+                                    <p className="text-sm text-slate-400">Select an action (Admin Verified)</p>
                                 </div>
 
                                 <div className="bg-slate-50 p-4 rounded-xl mb-6 border border-slate-200">
@@ -476,6 +495,14 @@
                                         onTouchStart={() => handlePressStart(t)}
                                         onTouchEnd={handlePressEnd}
                                     >
+                                        {/* Progress Bar (Visible only when holding THIS item) */}
+                                        {holdingId === t.id && (
+                                            <div 
+                                                className="holding-bar" 
+                                                style={{animation: 'loadWidth 10s linear forwards'}} 
+                                            />
+                                        )}
+
                                         <div className="flex items-start gap-3 relative z-10 pointer-events-none">
                                             <div className={`mt-1 p-2.5 rounded-full ${t.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
                                                 <Icon name={t.type === 'income' ? 'trending-up' : 'trending-down'} size={16} />
@@ -493,7 +520,6 @@
                                                 {t.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
                                             </p>
                                         </div>
-                                        {/* Progress Bar Animation for Long Press could be added here later */}
                                     </div>
                                 ))}
                             </div>
@@ -511,4 +537,4 @@
         root.render(<App />);
     </script>
 </body>
-    </html>
+</html>
