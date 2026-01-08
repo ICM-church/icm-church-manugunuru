@@ -18,9 +18,8 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- FIREBASE COMPAT SCRIPTS (Best for Single HTML Files) -->
+    <!-- FIREBASE COMPAT SCRIPTS (No login required logic) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
     <style>
@@ -34,6 +33,9 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        // --- CONFIGURATION ---
+        const ADMIN_PASSWORD = "admin5566"; // <--- PASSWORD IKADA SET CHESAM
+
         // --- YOUR FIREBASE CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyDG3Ngmf1XbipPM6OIPjiaCmd8V8Ucmw4c",
@@ -45,15 +47,11 @@
             measurementId: "G-9KYQ4F749P"
         };
 
-        // Initialize Firebase (Compat Mode - Much more stable for HTML files)
+        // Initialize Firebase
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
-        const auth = firebase.auth();
         const db = firebase.firestore();
-
-        // Admin Email (Must match the user created in Firebase Authentication)
-        const ADMIN_EMAIL = "admin@icmchurch.com";
 
         // --- ICONS COMPONENT ---
         const Icon = ({ name, size = 24, className = "" }) => {
@@ -82,7 +80,6 @@
 
             // Fetch Data
             React.useEffect(() => {
-                // Using a simple collection path "transactions"
                 const unsubscribe = db.collection('transactions')
                     .orderBy('date', 'desc')
                     .onSnapshot((snapshot) => {
@@ -94,10 +91,9 @@
                         setLoading(false);
                     }, (error) => {
                         console.error("Error fetching data: ", error);
-                        // If permission error, still stop loading
                         setLoading(false);
                         if(error.code === 'permission-denied') {
-                            alert("Please enable Firestore Rules to 'allow read, write: if true;' for testing.");
+                            alert("Please enable Firestore Rules to 'allow read, write: if true;' since we removed Auth.");
                         }
                     });
 
@@ -119,53 +115,52 @@
             const handleAdd = async (e) => {
                 e.preventDefault();
                 if (!amount || !desc || !password) return;
+                
+                // --- SIMPLE PASSWORD CHECK ---
+                if (password !== ADMIN_PASSWORD) {
+                    alert("🛑 తప్పు పాస్‌వర్డ్! (Wrong Password)");
+                    return;
+                }
+
                 setIsSubmitting(true);
 
                 try {
-                    // Security Check: Login
-                    await auth.signInWithEmailAndPassword(ADMIN_EMAIL, password);
-                    
-                    // Add Data
+                    // Add Data directly without auth
                     await db.collection('transactions').add({
                         amount: Number(amount),
                         description: desc,
                         type: type,
                         date: firebase.firestore.FieldValue.serverTimestamp(),
                         displayDate: new Date().toLocaleDateString('en-GB'),
-                        addedBy: ADMIN_EMAIL
+                        addedBy: 'Admin (Web)'
                     });
-
-                    // Logout
-                    await auth.signOut();
 
                     setAmount('');
                     setDesc('');
                     setPassword('');
-                    alert("✅ Entry Added Successfully!");
+                    alert("✅ సక్సెస్! లిస్ట్ లో యాడ్ అయ్యింది.");
                     setShowInputForm(false);
                 } catch (error) {
                     console.error("Error:", error);
-                    let msg = "Error adding data";
-                    if(error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
-                        msg = "🛑 WRONG PASSWORD! (Or Admin user not found)";
-                    } else if (error.code === 'auth/user-not-found') {
-                        msg = "🛑 User 'admin@icmchurch.com' not found in Firebase Auth.";
-                    }
-                    alert(msg);
+                    alert("Error adding data. Check console.");
                 }
                 setIsSubmitting(false);
             };
 
             const handleDelete = async (id) => {
-                const pwd = prompt("🔐 ADMIN CHECK:\nEnter Password to DELETE this entry:");
+                const pwd = prompt("🔐 పాస్‌వర్డ్ చెప్పండి (Enter Admin Password):");
                 if (!pwd) return;
 
+                if (pwd !== ADMIN_PASSWORD) {
+                    alert("🛑 తప్పు పాస్‌వర్డ్! డిలీట్ చేయలేరు.");
+                    return;
+                }
+
                 try {
-                    await auth.signInWithEmailAndPassword(ADMIN_EMAIL, pwd);
                     await db.collection('transactions').doc(id).delete();
-                    await auth.signOut();
+                    // Auto update UI, no alert needed
                 } catch (error) {
-                    alert("🛑 Delete Failed! Check Password.");
+                    alert("Delete Failed!");
                 }
             };
 
@@ -181,7 +176,7 @@
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-slate-50 flex-col gap-4">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                        <p className="text-slate-400 text-sm">Connecting to ICM Church Database...</p>
+                        <p className="text-slate-400 text-sm">Loading Accounts...</p>
                     </div>
                 );
             }
@@ -283,8 +278,8 @@
                                             <Icon name="shield-check" size={18} className="text-indigo-400" />
                                         </div>
                                         <input 
-                                            type="password" 
-                                            placeholder="Admin Password" 
+                                            type="text" 
+                                            placeholder="Enter Admin Password" 
                                             className="w-full pl-10 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-indigo-900 font-mono text-sm"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
@@ -296,7 +291,7 @@
                                         disabled={isSubmitting}
                                         className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg active:scale-95 transition flex items-center justify-center gap-2 ${type === 'income' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}
                                     >
-                                        {isSubmitting ? 'Verifying...' : (type === 'income' ? 'Save Income' : 'Save Expense')}
+                                        {isSubmitting ? 'Checking...' : (type === 'income' ? 'Save Income' : 'Save Expense')}
                                     </button>
                                 </form>
                             </div>
@@ -356,7 +351,7 @@
                     </div>
                     
                     <div className="text-center text-slate-300 text-[10px] pb-4">
-                        ICM Church • Powered by Firebase
+                        ICM Church • Simple Ledger
                     </div>
                 </div>
             );
