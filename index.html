@@ -8,7 +8,7 @@
     <!-- GOOGLE VERIFICATION -->
     <meta name="google-site-verification" content="oFcdua6fdfc1HBbQ9gqGTAIB-mgNMCF1saFyyufHx-M" />
     
-    <!-- SEO KEYWORDS & DESCRIPTION (Updated per your request) -->
+    <!-- SEO KEYWORDS & DESCRIPTION -->
     <meta name="description" content="Official Accounts of ICM Church Manugunuru. View income, expenses, and updates for the church in Manugunuru Village transparently." />
     <meta name="keywords" content="Church Manugunuru, Manugunuru Church, ICM Church, ICM Church Manugunuru, Manugunuru Village, Manugunuru, ICM Church Manugunuru Accounts, Church Accounts, Church Finance, Manuguru" />
     <meta name="author" content="ICM Church Admin" />
@@ -104,6 +104,7 @@
             const [isSubmitting, setIsSubmitting] = React.useState(false);
             const [showInputForm, setShowInputForm] = React.useState(false);
             const [imgError, setImgError] = React.useState(false); 
+            const [showInfo, setShowInfo] = React.useState(false); // New state for Church Info Modal
             
             const [editId, setEditId] = React.useState(null);
             const [actionItem, setActionItem] = React.useState(null); 
@@ -237,7 +238,61 @@
 
             return (
                 <div className="max-w-md mx-auto bg-slate-50 min-h-screen shadow-xl relative pb-24">
-                    {/* ACTION MODAL */}
+                    
+                    {/* --- CHURCH INFO MODAL (Logo Click) --- */}
+                    {showInfo && (
+                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowInfo(false)}>
+                            <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl relative overflow-hidden" onClick={e => e.stopPropagation()}>
+                                {/* Close Button */}
+                                <button onClick={() => setShowInfo(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 p-1 rounded-full">
+                                    <Icon name="x" size={20} />
+                                </button>
+
+                                <div className="text-center mb-6 mt-2">
+                                    <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3 border-4 border-white shadow-lg overflow-hidden">
+                                         {LOGO_URL && !imgError ? 
+                                            <img src={LOGO_URL} className="w-full h-full object-cover" onError={() => setImgError(true)} referrerPolicy="no-referrer" /> 
+                                            : <Icon name="church" size={40} className="text-indigo-600" />
+                                         }
+                                    </div>
+                                    <h2 className="text-xl font-bold text-indigo-900 tracking-tight">ICM CHURCH</h2>
+                                    <p className="text-sm text-slate-500 font-medium">Manugunuru</p>
+                                </div>
+                                
+                                <div className="space-y-3 text-center">
+                                    {/* President */}
+                                    <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+                                        <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">సంస్థధ్యక్షులు</p>
+                                        <p className="text-base font-bold text-slate-800">బిషప్ జాన్ ఎస్ డి రాజు గారు</p>
+                                    </div>
+
+                                    {/* Pastor */}
+                                    <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">సంఘ కాపరి</p>
+                                        <p className="text-base font-bold text-slate-800">సాల్మన్ రాజు గారు</p>
+                                    </div>
+
+                                    {/* Elders */}
+                                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+                                        <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-3">సంఘపెద్దలు</p>
+                                        <ul className="text-sm text-slate-700 space-y-2 font-semibold">
+                                            <li className="border-b border-amber-100 pb-1 last:border-0 last:pb-0">జంగం గిద్యోను (బాబీ)</li>
+                                            <li className="border-b border-amber-100 pb-1 last:border-0 last:pb-0">గొవ్వాడ అబ్రహం</li>
+                                            <li className="border-b border-amber-100 pb-1 last:border-0 last:pb-0">మత్తే పండు</li>
+                                            <li className="border-b border-amber-100 pb-1 last:border-0 last:pb-0">మొగనాటి నాని</li>
+                                            <li>మేరుగు శ్యామ్ బాబు</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                
+                                <div className="mt-6 text-center">
+                                    <p className="text-[10px] text-slate-300">Soli Deo Gloria</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ACTION MODAL (Edit/Delete) */}
                     {actionItem && (
                         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
                             <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl">
@@ -259,7 +314,10 @@
                     <div className="bg-indigo-700 text-white pt-8 pb-10 px-6 rounded-b-[2.5rem] shadow-xl relative z-0">
                         <div className="flex justify-between items-start mb-6">
                             <div className="flex items-center gap-3">
-                                <div className={`p-1 rounded-lg ${LOGO_URL && !imgError ? 'bg-white' : 'bg-indigo-600'}`}>
+                                <div 
+                                    onClick={() => setShowInfo(true)} 
+                                    className={`p-1 rounded-lg cursor-pointer hover:scale-105 transition-transform active:scale-95 shadow-md ${LOGO_URL && !imgError ? 'bg-white' : 'bg-indigo-600'}`}
+                                >
                                     {LOGO_URL && !imgError ? (
                                         <img 
                                             src={LOGO_URL} 
@@ -362,4 +420,4 @@
         root.render(<App />);
     </script>
 </body>
-</html>
+    </html>
