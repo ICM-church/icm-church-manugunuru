@@ -94,21 +94,53 @@
             return <span dangerouslySetInnerHTML={{ __html: iconHTML }} style={{ display: 'inline-flex', alignItems: 'center' }} />;
         };
 
+        // --- IMAGE COMPRESSION UTILITY ---
+        const compressImage = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 800; // Resize to max 800px width
+                        const scaleSize = MAX_WIDTH / img.width;
+                        canvas.width = MAX_WIDTH;
+                        canvas.height = img.height * scaleSize;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.6)); // Compress to 60% quality
+                    };
+                    img.onerror = (error) => reject(error);
+                };
+                reader.onerror = (error) => reject(error);
+            });
+        };
+
         const App = () => {
             const [transactions, setTransactions] = React.useState([]);
             const [amount, setAmount] = React.useState('');
             const [desc, setDesc] = React.useState('');
             const [password, setPassword] = React.useState('');
             const [type, setType] = React.useState('income');
+            
+            // Image Upload State
+            const [billImage, setBillImage] = React.useState('');
+            const [viewImage, setViewImage] = React.useState(null); // Fullscreen image view
+            
             const [loading, setLoading] = React.useState(true);
             const [isSubmitting, setIsSubmitting] = React.useState(false);
             const [showInputForm, setShowInputForm] = React.useState(false);
             const [imgError, setImgError] = React.useState(false); 
-            const [showInfo, setShowInfo] = React.useState(false); // New state for Church Info Modal
+            const [showInfo, setShowInfo] = React.useState(false); 
             
             const [editId, setEditId] = React.useState(null);
             const [actionItem, setActionItem] = React.useState(null); 
             const pressTimer = React.useRef(null); 
+            
+            // Hidden file input ref
+            const fileInputRef = React.useRef(null);
 
             // Fetch Data
             React.useEffect(() => {
@@ -125,7 +157,7 @@
                         console.error("Error:", error);
                         setLoading(false);
                         if(error.code === 'permission-denied') {
-                            alert("🚨 Permission Denied! \nEven in Test Mode, ensure your rules allow read/write.");
+                            alert("🚨 Permission Denied! Check rules.");
                         } else {
                             alert("Connection Error: " + error.message);
                         }
@@ -135,14 +167,8 @@
             }, []);
 
             // Calculations
-            const totalIncome = transactions
-                .filter(t => t.type === 'income')
-                .reduce((acc, curr) => acc + Number(curr.amount), 0);
-
-            const totalExpense = transactions
-                .filter(t => t.type === 'expense')
-                .reduce((acc, curr) => acc + Number(curr.amount), 0);
-
+            const totalIncome = transactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + Number(curr.amount), 0);
+            const totalExpense = transactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
             const balance = totalIncome - totalExpense;
 
             const formatCurrency = (num) => {
@@ -169,6 +195,7 @@
                 setAmount(t.amount);
                 setDesc(t.description);
                 setType(t.type);
+                setBillImage(t.image || ''); // Load existing image
                 setEditId(t.id);
                 setPassword(''); 
                 setShowInputForm(true);
@@ -186,6 +213,19 @@
                 }
             };
 
+            // Image Upload Handler
+            const handleFileChange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                try {
+                    const compressedBase64 = await compressImage(file);
+                    setBillImage(compressedBase64);
+                } catch (error) {
+                    alert("Image upload failed: " + error.message);
+                }
+            };
+
             const handleSaveOrUpdate = async (e) => {
                 e.preventDefault();
                 if (!amount || !desc || !password) return;
@@ -197,27 +237,29 @@
 
                 setIsSubmitting(true);
                 try {
+                    const transactionData = {
+                        amount: Number(amount),
+                        description: desc,
+                        type: type,
+                        image: billImage, // Save image string
+                        lastEdited: firebase.firestore.FieldValue.serverTimestamp(),
+                        lastEditedBy: 'Admin'
+                    };
+
                     if (editId) {
                         if (!window.confirm("Confirm Update?")) { setIsSubmitting(false); return; }
-                        await db.collection('transactions').doc(editId).update({
-                            amount: Number(amount),
-                            description: desc,
-                            type: type,
-                            lastEdited: firebase.firestore.FieldValue.serverTimestamp()
-                        });
+                        await db.collection('transactions').doc(editId).update(transactionData);
                         alert("✅ Updated Successfully!");
-                        setEditId(null); setAmount(''); setDesc(''); setPassword(''); setShowInputForm(false);
+                        resetForm();
                     } else {
                         if (!window.confirm("Confirm Save?")) { setIsSubmitting(false); return; }
                         await db.collection('transactions').add({
-                            amount: Number(amount),
-                            description: desc,
-                            type: type,
+                            ...transactionData,
                             date: firebase.firestore.FieldValue.serverTimestamp(),
                             displayDate: new Date().toLocaleDateString('en-GB')
                         });
                         alert("✅ Saved Successfully!");
-                        setAmount(''); setDesc(''); setPassword(''); setShowInputForm(false);
+                        resetForm();
                     }
                 } catch (error) {
                     console.error("Save Error:", error);
@@ -225,6 +267,10 @@
                 } finally {
                     setIsSubmitting(false);
                 }
+            };
+
+            const resetForm = () => {
+                setEditId(null); setAmount(''); setDesc(''); setPassword(''); setBillImage(''); setShowInputForm(false);
             };
 
             if (loading) {
@@ -239,55 +285,51 @@
             return (
                 <div className="max-w-md mx-auto bg-slate-50 min-h-screen shadow-xl relative pb-24">
                     
-                    {/* --- CHURCH INFO MODAL (Logo Click) --- */}
+                    {/* --- FULLSCREEN IMAGE VIEWER --- */}
+                    {viewImage && (
+                        <div className="fixed inset-0 bg-black z-[100] flex items-center justify-center p-2 animate-fade-in" onClick={() => setViewImage(null)}>
+                            <button className="absolute top-4 right-4 bg-white/20 text-white p-2 rounded-full backdrop-blur-md">
+                                <Icon name="x" size={24} />
+                            </button>
+                            <img src={viewImage} className="max-w-full max-h-full rounded-lg shadow-2xl object-contain" onClick={(e) => e.stopPropagation()} />
+                        </div>
+                    )}
+
+                    {/* --- CHURCH INFO MODAL --- */}
                     {showInfo && (
                         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowInfo(false)}>
                             <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl relative overflow-hidden" onClick={e => e.stopPropagation()}>
-                                {/* Close Button */}
                                 <button onClick={() => setShowInfo(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 p-1 rounded-full">
                                     <Icon name="x" size={20} />
                                 </button>
-
                                 <div className="text-center mb-6 mt-2">
                                     <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3 border-4 border-white shadow-lg overflow-hidden">
-                                         {LOGO_URL && !imgError ? 
-                                            <img src={LOGO_URL} className="w-full h-full object-cover" onError={() => setImgError(true)} referrerPolicy="no-referrer" /> 
-                                            : <Icon name="church" size={40} className="text-indigo-600" />
-                                         }
+                                         {LOGO_URL && !imgError ? <img src={LOGO_URL} className="w-full h-full object-cover" onError={() => setImgError(true)} referrerPolicy="no-referrer" /> : <Icon name="church" size={40} className="text-indigo-600" />}
                                     </div>
                                     <h2 className="text-xl font-bold text-indigo-900 tracking-tight">ICM CHURCH</h2>
                                     <p className="text-sm text-slate-500 font-medium">Manugunuru</p>
                                 </div>
-                                
                                 <div className="space-y-3 text-center">
-                                    {/* President */}
                                     <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100">
                                         <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">సంస్థధ్యక్షులు</p>
                                         <p className="text-base font-bold text-slate-800">బిషప్ జాన్ ఎస్ డి రాజు గారు</p>
                                     </div>
-
-                                    {/* Pastor */}
                                     <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
                                         <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">సంఘ కాపరి</p>
                                         <p className="text-base font-bold text-slate-800">సాల్మన్ రాజు గారు</p>
                                     </div>
-
-                                    {/* Elders */}
                                     <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
                                         <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-3">సంఘపెద్దలు</p>
                                         <ul className="text-sm text-slate-700 space-y-2 font-semibold">
-                                            <li className="border-b border-amber-100 pb-1 last:border-0 last:pb-0">జంగం గిద్యోను (బాబీ)</li>
-                                            <li className="border-b border-amber-100 pb-1 last:border-0 last:pb-0">గొవ్వాడ అబ్రహం</li>
-                                            <li className="border-b border-amber-100 pb-1 last:border-0 last:pb-0">మత్తే పండు</li>
-                                            <li className="border-b border-amber-100 pb-1 last:border-0 last:pb-0">మొగనాటి నాని</li>
+                                            <li className="border-b border-amber-100 pb-1">జంగం గిద్యోను (బాబీ)</li>
+                                            <li className="border-b border-amber-100 pb-1">గొవ్వాడ అబ్రహం</li>
+                                            <li className="border-b border-amber-100 pb-1">మత్తే పండు</li>
+                                            <li className="border-b border-amber-100 pb-1">మొగనాటి నాని</li>
                                             <li>మేరుగు శ్యామ్ బాబు</li>
                                         </ul>
                                     </div>
                                 </div>
-                                
-                                <div className="mt-6 text-center">
-                                    <p className="text-[10px] text-slate-300">Soli Deo Gloria</p>
-                                </div>
+                                <div className="mt-6 text-center"><p className="text-[10px] text-slate-300">Soli Deo Gloria</p></div>
                             </div>
                         </div>
                     )}
@@ -314,21 +356,8 @@
                     <div className="bg-indigo-700 text-white pt-8 pb-10 px-6 rounded-b-[2.5rem] shadow-xl relative z-0">
                         <div className="flex justify-between items-start mb-6">
                             <div className="flex items-center gap-3">
-                                <div 
-                                    onClick={() => setShowInfo(true)} 
-                                    className={`p-1 rounded-lg cursor-pointer hover:scale-105 transition-transform active:scale-95 shadow-md ${LOGO_URL && !imgError ? 'bg-white' : 'bg-indigo-600'}`}
-                                >
-                                    {LOGO_URL && !imgError ? (
-                                        <img 
-                                            src={LOGO_URL} 
-                                            alt="Logo" 
-                                            className="w-10 h-10 object-contain rounded-full" 
-                                            onError={() => setImgError(true)}
-                                            referrerPolicy="no-referrer"
-                                        />
-                                    ) : (
-                                        <Icon name="church" size={32} className="text-white" />
-                                    )}
+                                <div onClick={() => setShowInfo(true)} className={`p-1 rounded-lg cursor-pointer hover:scale-105 transition-transform active:scale-95 shadow-md ${LOGO_URL && !imgError ? 'bg-white' : 'bg-indigo-600'}`}>
+                                    {LOGO_URL && !imgError ? <img src={LOGO_URL} alt="Logo" className="w-10 h-10 object-contain rounded-full" onError={() => setImgError(true)} referrerPolicy="no-referrer" /> : <Icon name="church" size={32} className="text-white" />}
                                 </div>
                                 <div>
                                     <h1 className="font-bold text-xl tracking-tight">ICM CHURCH</h1>
@@ -374,9 +403,38 @@
                                 <form onSubmit={handleSaveOrUpdate} className="space-y-3">
                                     <input type="number" placeholder="Amount (₹)" className="w-full text-lg font-semibold px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={amount} onChange={(e) => setAmount(e.target.value)} required />
                                     <input type="text" placeholder="Description" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={desc} onChange={(e) => setDesc(e.target.value)} required />
+                                    
+                                    {/* IMAGE UPLOAD SECTION */}
+                                    <div className="flex items-center gap-2">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => fileInputRef.current.click()}
+                                            className={`flex-1 py-2.5 rounded-xl border border-dashed flex items-center justify-center gap-2 text-sm font-medium transition ${billImage ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-slate-300 text-slate-500 hover:bg-slate-50'}`}
+                                        >
+                                            {billImage ? <><Icon name="check" size={16}/> Bill Uploaded</> : <><Icon name="camera" size={16}/> Upload Bill Photo</>}
+                                        </button>
+                                        {billImage && (
+                                            <button type="button" onClick={() => setBillImage('')} className="p-2.5 bg-rose-50 text-rose-500 rounded-xl border border-rose-200 hover:bg-rose-100">
+                                                <Icon name="trash-2" size={16} />
+                                            </button>
+                                        )}
+                                        <input 
+                                            type="file" 
+                                            ref={fileInputRef} 
+                                            onChange={handleFileChange} 
+                                            className="hidden" 
+                                            accept="image/*"
+                                        />
+                                    </div>
+                                    {/* Preview Small Image */}
+                                    {billImage && <div className="w-full h-24 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 relative">
+                                        <img src={billImage} className="w-full h-full object-cover opacity-80" />
+                                    </div>}
+
                                     <input type="text" placeholder="Admin Password" className="w-full px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                                    
                                     <div className="flex gap-2">
-                                        {editId && <button type="button" onClick={() => {setEditId(null); setShowInputForm(false)}} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold text-slate-500">Cancel</button>}
+                                        {editId && <button type="button" onClick={resetForm} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold text-slate-500">Cancel</button>}
                                         <button disabled={isSubmitting} className={`flex-1 py-3.5 rounded-xl font-bold text-white shadow-lg ${editId ? 'bg-amber-600' : 'bg-indigo-600'}`}>{isSubmitting ? '...' : 'Save'}</button>
                                     </div>
                                 </form>
@@ -403,8 +461,21 @@
                                                 <div className="flex items-center gap-2 text-xs text-slate-400 mt-1"><Icon name="calendar" size={12} /> {t.displayDate}</div>
                                             </div>
                                         </div>
-                                        <div className="text-right pointer-events-none">
-                                            <p className={`font-bold text-sm ${t.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>{t.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}</p>
+                                        <div className="text-right pointer-events-auto flex items-center gap-2">
+                                            {/* BILL ICON IF IMAGE EXISTS */}
+                                            {t.image && (
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation(); // Don't trigger long press
+                                                        setViewImage(t.image);
+                                                    }}
+                                                    className="p-2 bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition"
+                                                    title="View Bill"
+                                                >
+                                                    <Icon name="image" size={16} />
+                                                </button>
+                                            )}
+                                            <p className={`font-bold text-sm pointer-events-none ${t.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>{t.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}</p>
                                         </div>
                                     </div>
                                 ))}
