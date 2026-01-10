@@ -8,11 +8,6 @@
     <!-- GOOGLE VERIFICATION -->
     <meta name="google-site-verification" content="oFcdua6fdfc1HBbQ9gqGTAIB-mgNMCF1saFyyufHx-M" />
     
-    <!-- SEO KEYWORDS & DESCRIPTION -->
-    <meta name="description" content="Official Accounts of ICM Church Manugunuru. View income, expenses, and updates for the church in Manugunuru Village transparently." />
-    <meta name="keywords" content="Church Manugunuru, Manugunuru Church, ICM Church, ICM Church Manugunuru, Manugunuru Village, Manugunuru, ICM Church Manugunuru Accounts, Church Accounts, Church Finance, Manuguru" />
-    <meta name="author" content="ICM Church Admin" />
-
     <title>ICM Church Manugunuru Accounts</title>
     
     <!-- GOOGLE SEARCH FAVICON -->
@@ -25,13 +20,13 @@
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- FIXED LUCIDE VERSION (Stable) -->
     <script src="https://unpkg.com/lucide@0.263.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- FIREBASE (Version 8 - Stable) -->
+    <!-- FIREBASE (Version 8) - Added Auth -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
@@ -40,7 +35,6 @@
         .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
         .select-none { user-select: none; -webkit-user-select: none; }
         
-        /* Progress Bar Animation for Long Press */
         @keyframes loadWidth { from { width: 0; } to { width: 100%; } }
         .holding-bar {
             position: absolute; bottom: 0; left: 0; height: 3px;
@@ -54,6 +48,7 @@
     <script type="text/babel">
         // --- CONFIGURATION ---
         const ADMIN_PASSWORD = "admin5566"; 
+        const AUTHORIZED_EMAIL = "yesububirugadda37@gmail.com"; // 👈 ONLY THIS EMAIL CAN SEE ADD BUTTON
         const LOGO_URL = "https://drive.google.com/thumbnail?id=1UYqySNGlyww8sJcRFA4xLkosdUIu_QAS&sz=w256"; 
 
         // --- FIREBASE CONFIGURATION ---
@@ -76,8 +71,9 @@
         }
         
         const db = firebase.firestore();
+        const auth = firebase.auth();
 
-        // --- FIXED ICON COMPONENT ---
+        // --- ICON COMPONENT ---
         const Icon = ({ name, size = 24, className = "" }) => {
             const iconHTML = React.useMemo(() => {
                 try {
@@ -94,7 +90,7 @@
             return <span dangerouslySetInnerHTML={{ __html: iconHTML }} style={{ display: 'inline-flex', alignItems: 'center' }} />;
         };
 
-        // --- IMAGE COMPRESSION UTILITY ---
+        // --- IMAGE COMPRESSION ---
         const compressImage = (file) => {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -104,13 +100,13 @@
                     img.src = event.target.result;
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
-                        const MAX_WIDTH = 800; // Resize to max 800px width
+                        const MAX_WIDTH = 800; 
                         const scaleSize = MAX_WIDTH / img.width;
                         canvas.width = MAX_WIDTH;
                         canvas.height = img.height * scaleSize;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        resolve(canvas.toDataURL('image/jpeg', 0.6)); // Compress to 60% quality
+                        resolve(canvas.toDataURL('image/jpeg', 0.6)); 
                     };
                     img.onerror = (error) => reject(error);
                 };
@@ -118,29 +114,140 @@
             });
         };
 
+        // --- PIE CHART COMPONENT ---
+        const FinancialChart = ({ income, expense }) => {
+            const canvasRef = React.useRef(null);
+            const chartInstance = React.useRef(null);
+
+            React.useEffect(() => {
+                if (canvasRef.current) {
+                    if (chartInstance.current) {
+                        chartInstance.current.destroy();
+                    }
+
+                    const ctx = canvasRef.current.getContext('2d');
+                    
+                    if (income === 0 && expense === 0) return;
+
+                    chartInstance.current = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['ఆదాయం (Income)', 'ఖర్చు (Expense)'],
+                            datasets: [{
+                                data: [income, expense],
+                                backgroundColor: [
+                                    '#10b981', // Emerald 500
+                                    '#f43f5e'   // Rose 500
+                                ],
+                                borderColor: [
+                                    '#ffffff',
+                                    '#ffffff'
+                                ],
+                                borderWidth: 2,
+                                hoverOffset: 10
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: {
+                                        color: '#374151', 
+                                        font: { size: 14, family: "'Inter', sans-serif", weight: 'bold' },
+                                        padding: 20
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.label || '';
+                                            if (label) { label += ': '; }
+                                            if (context.parsed !== null) {
+                                                label += new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(context.parsed);
+                                            }
+                                            return label;
+                                        }
+                                    }
+                                }
+                            },
+                            cutout: '60%'
+                        }
+                    });
+                }
+                return () => {
+                    if (chartInstance.current) {
+                        chartInstance.current.destroy();
+                    }
+                };
+            }, [income, expense]);
+
+            return (
+                <div className="w-full h-64 mx-auto relative">
+                    {(income === 0 && expense === 0) ? (
+                        <div className="flex items-center justify-center h-full text-slate-400 text-sm italic">
+                            No data for chart
+                        </div>
+                    ) : (
+                        <canvas ref={canvasRef}></canvas>
+                    )}
+                </div>
+            );
+        };
+
         const App = () => {
+            const [user, setUser] = React.useState(null); // Current User State
             const [transactions, setTransactions] = React.useState([]);
             const [amount, setAmount] = React.useState('');
             const [desc, setDesc] = React.useState('');
             const [password, setPassword] = React.useState('');
             const [type, setType] = React.useState('income');
-            
-            // Image Upload State
             const [billImage, setBillImage] = React.useState('');
-            const [viewImage, setViewImage] = React.useState(null); // Fullscreen image view
+            const [viewImage, setViewImage] = React.useState(null);
             
             const [loading, setLoading] = React.useState(true);
             const [isSubmitting, setIsSubmitting] = React.useState(false);
             const [showInputForm, setShowInputForm] = React.useState(false);
             const [imgError, setImgError] = React.useState(false); 
             const [showInfo, setShowInfo] = React.useState(false); 
+            const [showChart, setShowChart] = React.useState(false);
             
             const [editId, setEditId] = React.useState(null);
             const [actionItem, setActionItem] = React.useState(null); 
             const pressTimer = React.useRef(null); 
-            
-            // Hidden file input ref
             const fileInputRef = React.useRef(null);
+
+            // AUTH STATE LISTENER
+            React.useEffect(() => {
+                const unsubscribeAuth = auth.onAuthStateChanged((u) => {
+                    setUser(u);
+                });
+                return () => unsubscribeAuth();
+            }, []);
+
+            // Login Function
+            const handleLogin = async () => {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                try {
+                    await auth.signInWithPopup(provider);
+                    // alert("Login Successful!");
+                } catch (error) {
+                    console.error("Login Failed", error);
+                    alert("Login Failed: " + error.message);
+                }
+            };
+
+            // Logout Function
+            const handleLogout = async () => {
+                try {
+                    await auth.signOut();
+                    setShowInputForm(false); // Hide form on logout
+                    alert("Logged Out Successfully");
+                } catch (error) {
+                    console.error("Logout Failed", error);
+                }
+            };
 
             // Fetch Data
             React.useEffect(() => {
@@ -180,7 +287,7 @@
                 if (pressTimer.current) clearTimeout(pressTimer.current);
                 pressTimer.current = setTimeout(() => {
                     if(window.navigator.vibrate) window.navigator.vibrate(200);
-                    const pwd = prompt("🔐 Admin Password:");
+                    const pwd = prompt("🔐 Admin Password (Modify):");
                     if (pwd === ADMIN_PASSWORD) { setActionItem(t); } 
                     else if (pwd !== null) { alert("Wrong Password!"); }
                 }, 10000); 
@@ -195,7 +302,7 @@
                 setAmount(t.amount);
                 setDesc(t.description);
                 setType(t.type);
-                setBillImage(t.image || ''); // Load existing image
+                setBillImage(t.image || ''); 
                 setEditId(t.id);
                 setPassword(''); 
                 setShowInputForm(true);
@@ -213,11 +320,9 @@
                 }
             };
 
-            // Image Upload Handler
             const handleFileChange = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                
                 try {
                     const compressedBase64 = await compressImage(file);
                     setBillImage(compressedBase64);
@@ -230,6 +335,7 @@
                 e.preventDefault();
                 if (!amount || !desc || !password) return;
                 
+                // --- SECOND LAYER SECURITY: Password Check ---
                 if (password !== ADMIN_PASSWORD) {
                     alert("🛑 Wrong Password! (పాస్‌వర్డ్ తప్పు)");
                     return;
@@ -241,9 +347,9 @@
                         amount: Number(amount),
                         description: desc,
                         type: type,
-                        image: billImage, // Save image string
+                        image: billImage, 
                         lastEdited: firebase.firestore.FieldValue.serverTimestamp(),
-                        lastEditedBy: 'Admin'
+                        lastEditedBy: user.email // Track who added it
                     };
 
                     if (editId) {
@@ -262,8 +368,7 @@
                         resetForm();
                     }
                 } catch (error) {
-                    console.error("Save Error:", error);
-                    alert("❌ Error: " + error.message);
+                    alert("Error: " + error.message);
                 } finally {
                     setIsSubmitting(false);
                 }
@@ -295,7 +400,33 @@
                         </div>
                     )}
 
-                    {/* --- CHURCH INFO MODAL --- */}
+                    {/* --- CHART MODAL --- */}
+                    {showChart && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[90] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowChart(false)}>
+                            <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+                                <button onClick={() => setShowChart(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 p-1.5 rounded-full">
+                                    <Icon name="x" size={20} />
+                                </button>
+                                <div className="text-center mb-4">
+                                    <h3 className="text-xl font-bold text-gray-800">Financial Analysis</h3>
+                                    <p className="text-xs text-slate-400">Income vs Expenses</p>
+                                </div>
+                                <FinancialChart income={totalIncome} expense={totalExpense} />
+                                <div className="mt-6 grid grid-cols-2 gap-3 text-center">
+                                    <div className="bg-emerald-50 p-2 rounded-xl">
+                                        <p className="text-xs text-emerald-600 font-bold">Total In</p>
+                                        <p className="font-bold text-slate-800">{formatCurrency(totalIncome)}</p>
+                                    </div>
+                                    <div className="bg-rose-50 p-2 rounded-xl">
+                                        <p className="text-xs text-rose-600 font-bold">Total Out</p>
+                                        <p className="font-bold text-slate-800">{formatCurrency(totalExpense)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* --- CHURCH INFO MODAL (WITH LOGIN) --- */}
                     {showInfo && (
                         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowInfo(false)}>
                             <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl relative overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -311,7 +442,7 @@
                                 </div>
                                 <div className="space-y-3 text-center">
                                     <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100">
-                                        <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">సంస్థాధికారి</p>
+                                        <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1">సంస్థధ్యక్షులు</p>
                                         <p className="text-base font-bold text-slate-800">బిషప్ జాన్ ఎస్ డి రాజు గారు</p>
                                     </div>
                                     <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
@@ -329,12 +460,33 @@
                                         </ul>
                                     </div>
                                 </div>
-                                <div className="mt-6 text-center"><p className="text-[10px] text-slate-300">Soli Deo Gloria</p></div>
+                                
+                                {/* LOGIN / LOGOUT BUTTON */}
+                                <div className="mt-6 pt-4 border-t border-slate-100 flex justify-center">
+                                    {!user ? (
+                                        <button 
+                                            onClick={handleLogin}
+                                            className="text-xs font-semibold text-indigo-500 hover:text-indigo-700 flex items-center gap-1 bg-indigo-50 px-3 py-1.5 rounded-full transition"
+                                        >
+                                            <Icon name="log-in" size={14} /> Admin Login
+                                        </button>
+                                    ) : (
+                                        <div className="flex flex-col items-center">
+                                            <p className="text-[10px] text-slate-400 mb-1">Signed in as: {user.email}</p>
+                                            <button 
+                                                onClick={handleLogout}
+                                                className="text-xs font-semibold text-rose-500 hover:text-rose-700 flex items-center gap-1 bg-rose-50 px-3 py-1.5 rounded-full transition"
+                                            >
+                                                <Icon name="log-out" size={14} /> Logout
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
 
-                    {/* ACTION MODAL (Edit/Delete) */}
+                    {/* ACTION MODAL */}
                     {actionItem && (
                         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
                             <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl">
@@ -369,7 +521,9 @@
                         </div>
                         <div className="text-center mt-4">
                             <p className="text-indigo-200 text-sm font-medium mb-1 uppercase text-[10px]">Total Balance</p>
-                            <h2 className="text-5xl font-bold mb-6 drop-shadow-sm">{formatCurrency(balance)}</h2>
+                            <h2 className="text-5xl font-bold mb-4 drop-shadow-sm">{formatCurrency(balance)}</h2>
+                            
+                            {/* REVERTED TO ORIGINAL GRID LAYOUT */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="glass p-3 rounded-2xl">
                                     <div className="flex justify-center text-emerald-300 mb-1 text-[10px] font-bold uppercase"><Icon name="trending-up" size={12} /> Received</div>
@@ -380,11 +534,21 @@
                                     <p className="text-lg font-semibold">{formatCurrency(totalExpense)}</p>
                                 </div>
                             </div>
+
+                            {/* NEW SEPARATE SECTION FOR CHART */}
+                            <div className="mt-6 flex justify-center">
+                                <button 
+                                    onClick={() => setShowChart(true)}
+                                    className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white text-xs font-semibold py-2 px-6 rounded-full flex items-center gap-2 border border-white/20 transition-all active:scale-95"
+                                >
+                                    <Icon name="pie-chart" size={16} /> View Analysis 📊
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    {/* ADMIN TOGGLE */}
-                    {!editId && (
+                    {/* ADMIN TOGGLE - VISIBLE ONLY IF LOGGED IN WITH CORRECT EMAIL */}
+                    {!editId && user && user.email === AUTHORIZED_EMAIL && (
                         <div className="px-6 -mt-5 relative z-10 flex justify-center">
                             <button onClick={() => setShowInputForm(!showInputForm)} className="bg-white text-indigo-700 px-6 py-2.5 rounded-full shadow-lg font-bold text-sm flex items-center gap-2 hover:scale-105 active:scale-95 transition-all border border-indigo-50">
                                 {showInputForm ? <><span className="text-rose-500">Close</span> <Icon name="x" size={16}/></> : <><Icon name="lock" size={14}/> Add Data</>}
@@ -404,35 +568,19 @@
                                     <input type="number" placeholder="Amount (₹)" className="w-full text-lg font-semibold px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={amount} onChange={(e) => setAmount(e.target.value)} required />
                                     <input type="text" placeholder="Description" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={desc} onChange={(e) => setDesc(e.target.value)} required />
                                     
-                                    {/* IMAGE UPLOAD SECTION */}
+                                    {/* IMAGE UPLOAD */}
                                     <div className="flex items-center gap-2">
-                                        <button 
-                                            type="button" 
-                                            onClick={() => fileInputRef.current.click()}
-                                            className={`flex-1 py-2.5 rounded-xl border border-dashed flex items-center justify-center gap-2 text-sm font-medium transition ${billImage ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-slate-300 text-slate-500 hover:bg-slate-50'}`}
-                                        >
-                                            {billImage ? <><Icon name="check" size={16}/> Bill Uploaded</> : <><Icon name="camera" size={16}/> Upload Bill Photo</>}
+                                        <button type="button" onClick={() => fileInputRef.current.click()} className={`flex-1 py-2.5 rounded-xl border border-dashed flex items-center justify-center gap-2 text-sm font-medium transition ${billImage ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-slate-300 text-slate-500 hover:bg-slate-50'}`}>
+                                            {billImage ? <><Icon name="check" size={16}/> Bill Added</> : <><Icon name="camera" size={16}/> Upload Bill</>}
                                         </button>
                                         {billImage && (
-                                            <button type="button" onClick={() => setBillImage('')} className="p-2.5 bg-rose-50 text-rose-500 rounded-xl border border-rose-200 hover:bg-rose-100">
-                                                <Icon name="trash-2" size={16} />
-                                            </button>
+                                            <button type="button" onClick={() => setBillImage('')} className="p-2.5 bg-rose-50 text-rose-500 rounded-xl border border-rose-200 hover:bg-rose-100"><Icon name="trash-2" size={16} /></button>
                                         )}
-                                        <input 
-                                            type="file" 
-                                            ref={fileInputRef} 
-                                            onChange={handleFileChange} 
-                                            className="hidden" 
-                                            accept="image/*"
-                                        />
+                                        <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
                                     </div>
-                                    {/* Preview Small Image */}
-                                    {billImage && <div className="w-full h-24 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 relative">
-                                        <img src={billImage} className="w-full h-full object-cover opacity-80" />
-                                    </div>}
+                                    {billImage && <div className="w-full h-24 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 relative"><img src={billImage} className="w-full h-full object-cover opacity-80" /></div>}
 
-                                    <input type="text" placeholder="Admin Password" className="w-full px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl" value={password} onChange={(e) => setPassword(e.target.value)} required />
-                                    
+                                    <input type="text" placeholder="Admin Password (admin5566)" className="w-full px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl" value={password} onChange={(e) => setPassword(e.target.value)} required />
                                     <div className="flex gap-2">
                                         {editId && <button type="button" onClick={resetForm} className="flex-1 py-3 bg-slate-100 rounded-xl font-bold text-slate-500">Cancel</button>}
                                         <button disabled={isSubmitting} className={`flex-1 py-3.5 rounded-xl font-bold text-white shadow-lg ${editId ? 'bg-amber-600' : 'bg-indigo-600'}`}>{isSubmitting ? '...' : 'Save'}</button>
@@ -462,18 +610,8 @@
                                             </div>
                                         </div>
                                         <div className="text-right pointer-events-auto flex items-center gap-2">
-                                            {/* BILL ICON IF IMAGE EXISTS */}
                                             {t.image && (
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation(); // Don't trigger long press
-                                                        setViewImage(t.image);
-                                                    }}
-                                                    className="p-2 bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition"
-                                                    title="View Bill"
-                                                >
-                                                    <Icon name="image" size={16} />
-                                                </button>
+                                                <button onClick={(e) => { e.stopPropagation(); setViewImage(t.image); }} className="p-2 bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition"><Icon name="image" size={16} /></button>
                                             )}
                                             <p className={`font-bold text-sm pointer-events-none ${t.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>{t.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}</p>
                                         </div>
@@ -491,4 +629,4 @@
         root.render(<App />);
     </script>
 </body>
-    </html>
+</html>
